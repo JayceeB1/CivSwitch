@@ -5,8 +5,9 @@ It reuses the **unchanged** Pico generator, extracts its USB identity and report
 descriptors, and replays the same keyboard/gamepad states and minimum holds.
 It does not convert a Pico UF2 into a Luckfox firmware image.
 
-**Status: software port; Switch hardware qualification NOT_RUN.** Source parity
-and transactional USB cleanup are tested independently of a console. Linux's
+**Status: Lyra Plus USB interfaces observed on a PC; Switch/game qualification
+NOT_RUN.** Source parity and transactional USB cleanup are tested independently
+of a console. Linux's
 HID gadget driver assigns endpoint addresses and HID descriptors itself: this
 is not a byte-identical reproduction of the Pico USB configuration descriptor.
 For Linux 6.1, full-speed polling is normally 10 ms instead of the Pico's 1 ms;
@@ -59,6 +60,51 @@ Linux 6.1 `f_hid` POLLOUT/completion semantics rather than just write submission
 
 ## USB session and restoration
 
+### Installed automatic startup
+
+`boot.py` and `S98civswitch` implement the Pico workflow: power the prepared
+board from the deliberately selected Switch USB host and the macro starts
+automatically once USB is configured, including the generated initial delay.
+It runs once per service start, then keeps the HID gadget with neutral outputs.
+There is no extra arm file or PC handoff requirement. Linux takes additional
+time to boot; it is not a microcontroller with instantaneous USB startup.
+
+The production service types immediately when attached to a host. It cannot
+identify whether that host is a Switch or a PC. Revert its startup mode before
+later reconnecting it to a PC for ordinary Murloc use.
+
+On the qualified image, the runtime is installed in `/opt/civswitch`, its HID
+module in the matching `/lib/modules/6.1.99/` tree, and the optional service in
+`/etc/init.d/S98civswitch`. The source bundle alone does not install them.
+`module.json` records the exact qualified module checksum and kernel release;
+startup verifies both, loads the module, and waits for the stock USB service.
+It holds that service's `/var/run/.usbdevice.lock` through setup and cleanup.
+
+Select startup mode with root access over Ethernet/serial:
+
+```sh
+python3 /opt/civswitch/boot.py mode civswitch
+# Later, when deliberately returning to Murloc:
+python3 /opt/civswitch/boot.py mode murloc
+```
+
+An offline fallback is the SD card's `civswitch/mode.txt`: put `murloc` on its
+own line, safely eject the card, then cold boot. This overrides the internal
+`/etc/civswitch/mode`. `civswitch` selects automatic playback again. Invalid
+mode contents select Murloc. No Murloc program or vendor USB configuration is
+replaced. `boot.py stop` stops the current session and waits for USB restoration
+without changing the selected startup mode.
+
+For qualification on a PC **only**, the explicit bounded command below suppresses
+all macro playback and gamepad-output echoes, then restores stock USB. It is a
+diagnostic command, not the production startup behavior:
+
+```sh
+nohup python3 /opt/civswitch/boot.py boot --test-idle 20 >usb-test.log 2>&1 </dev/null &
+```
+
+### Temporary command-line sessions
+
 The observed Lyra Plus firmware exposes `ff740000.usb` as its device controller
 and uses it for the `rockchip` ADB/RNDIS gadget. The other port is configured as
 a USB **host**. Use the actual names returned by `probe` on your own image.
@@ -94,7 +140,7 @@ without independent power cannot keep this process alive.
 
 The default total session timeout is 1800 seconds (maximum 3600). Existing
 Rockchip services must not concurrently reconfigure USB during a session. This
-adapter does not stop or modify those services. SIGKILL and hardware failure
+finite-session command does not stop or modify those services. SIGKILL and hardware failure
 cannot run Python cleanup. After a process crash, while the board is still on:
 
 ```sh
@@ -107,21 +153,18 @@ if restoration fails. Recovery never recreates or deletes the vendor gadget.
 
 ## Installed kernel prerequisite
 
-A read-only inspection on 2026-11-02 observed Linux 6.1.99/ARMv7, Python 3.11.8,
-the bound `rockchip` gadget, and only FunctionFS/RNDIS gadget modules. No
-`usb_f_hid.ko` was found in the installed module tree, and the readable kernel
-symbol table contained no `hidg` symbols. The build configuration was unavailable.
-These observations indicate that HID gadget support needs adding; a configfs
-HID creation probe and Switch enumeration have **not** been performed.
+The inspected Lyra Plus originally lacked `usb_f_hid`. A module was built from
+the official April 2025 SDK using the board configuration and the same GCC
+10.3.1 toolchain. The rebuilt/original `libcomposite.ko` `.text` sections match
+exactly. The new HID module loaded on the original kernel, created a disposable
+HID function, and exposed the gamepad and keyboard interfaces on Windows.
+See [the build and qualification receipt](HID-MODULE.md). The existing kernel,
+U-Boot and Murloc files are retained; no whole NAND image is flashed.
 
-`kernel-hid.config` is the required configuration fragment. Use the matching
-Luckfox Lyra SDK, original board configuration, build flags and `Module.symvers`.
-An unrelated module bearing the same `6.1.99` release is not proof of ABI
-compatibility. The vendor workflow uses `./build.sh lunch`,
-`./build.sh kernel-config`, then kernel/rootfs builds. Preserve the original
-configuration and use a separately prepared development image before changing
-an appliance. This repository supplies **no qualified replacement kernel,
-flash operation, NAND migration, or automatic module installation**.
+`kernel-hid.config` is the required configuration fragment. An unrelated module
+bearing the same `6.1.99` release is not proof of ABI compatibility. This
+repository contains source and a build recipe, not a universal flash image or
+a precompiled module suitable for every Lyra firmware.
 
 References: [Linux HID gadget](https://docs.kernel.org/usb/gadget_hid.html),
 [Linux 6.1 HID driver](https://github.com/torvalds/linux/blob/v6.1/drivers/usb/gadget/function/f_hid.c),
