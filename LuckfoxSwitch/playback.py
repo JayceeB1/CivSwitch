@@ -7,8 +7,9 @@ from macro import GAMEPAD_NEUTRAL, KEYBOARD_NEUTRAL, iter_steps
 
 
 class HidPair:
-    def __init__(self, nodes, timeout=2):
+    def __init__(self, nodes, timeout=2, echo_gamepad=True):
         self.fds, self.timeout = {}, timeout
+        self.echo_gamepad = echo_gamepad
         self.last = {}
         try:
             for name in ("gamepad", "keyboard"):
@@ -59,7 +60,7 @@ class HidPair:
                 if not data:
                     raise OSError("HID host disconnected")
                 # Pico echoes gamepad OUT reports; keyboard LED reports are just drained.
-                if fd == self.fds["gamepad"] and len(data) == 8:
+                if self.echo_gamepad and fd == self.fds["gamepad"] and len(data) == 8:
                     self.write("gamepad", data)
                     self.write("gamepad", self.last.get("gamepad", GAMEPAD_NEUTRAL))
 
@@ -77,8 +78,21 @@ class HidPair:
         return errors
 
 
-def replay(path, transport):
+def replay(path, transport, cancelled=None):
     """Never catch up after a delayed write: hold each state for its full duration."""
     for duration, keyboard, gamepad in iter_steps(path):
+        if cancelled is not None and cancelled():
+            raise InterruptedError("Playback stop requested")
         transport.send(keyboard, gamepad)
-        transport.hold(duration / 1000)
+        remaining = duration / 1000
+        if cancelled is None:
+            transport.hold(remaining)
+        else:
+            # Keep stop/fallback responsive even during an unusually long WAIT.
+            # Each slice still holds its full minimum; never catch up on delay.
+            while remaining > 0:
+                if cancelled():
+                    raise InterruptedError("Playback stop requested")
+                interval = min(remaining, 0.25)
+                transport.hold(interval)
+                remaining -= interval

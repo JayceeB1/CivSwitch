@@ -123,7 +123,7 @@ def build(payload, output, root=ROOT):
                 "macro": summary, "source_sha256": {
                     name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in sources}}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    for name in ("macro.py", "playback.py", "gadget.py", "device.py", "probe.py", "README.md", "ANALYSIS.md", "kernel-hid.config"):
+    for name in ("macro.py", "playback.py", "gadget.py", "device.py", "probe.py", "boot.py", "S98civswitch", "README.md", "ANALYSIS.md", "HID-MODULE.md", "kernel-hid.config"):
         shutil.copyfile(HERE / name, output / name)
     shutil.copyfile(root / "LICENSE", output / "LICENSE")
     return manifest

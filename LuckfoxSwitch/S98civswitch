@@ -1,0 +1,11 @@
+#!/bin/sh
+# Optional SysV/BusyBox startup. Install only after qualifying the HID module.
+case "$1" in
+  start)
+    /usr/bin/python3 /opt/civswitch/boot.py boot </dev/null >/var/log/civswitch.log 2>&1 &
+    ;;
+  stop)
+    /usr/bin/python3 /opt/civswitch/boot.py stop
+    ;;
+  *) exit 2 ;;
+esac
