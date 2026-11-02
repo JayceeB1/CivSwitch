@@ -1,0 +1,17 @@
+name: Luckfox HID adapter
+on:
+  push:
+    paths: ["LuckfoxSwitch/**", "PicoSwitch/include/**", "PicoSwitch/src/macro/**", "PicoSwitch/tools/payload_to_macro.py", ".github/workflows/luckfox.yml"]
+  pull_request:
+    paths: ["LuckfoxSwitch/**", "PicoSwitch/include/**", "PicoSwitch/src/macro/**", "PicoSwitch/tools/payload_to_macro.py", ".github/workflows/luckfox.yml"]
+permissions:
+  contents: read
+jobs:
+  software-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s LuckfoxSwitch/tests -v
