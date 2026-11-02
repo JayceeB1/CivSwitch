@@ -17,6 +17,11 @@ Two components:
 
 ## Layout
 
+An experimental [Luckfox/Linux USB HID adapter](LuckfoxSwitch/README.md) is also
+available. It reuses PicoSwitch's macro generator and preserves the original
+Pico sources. Linux HID gadget support is required; Switch hardware qualification
+of this adapter has not been performed.
+
 `core.js` at the root is the shared payload both components build from, and `send_js.py` at the root sends any payload to a running loader.
 
 ## Workflow
